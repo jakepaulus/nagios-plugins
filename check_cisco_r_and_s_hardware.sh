@@ -14,6 +14,8 @@
 #
 # Version 0.4 - * Added quick exit for known unsupported devices
 #
+# Version 0.5 - * Added stack member state check
+#
 # RELEASE NOTES:
 # There is a known issue that affects the accuracy of certain sensor readings for
 # X2 or Xenpak transceivers. The issue lies in a software bug that Cisco is having
@@ -304,6 +306,67 @@ elif [[ "$verbose" == 'true' ]]; then
 	echo "This device does not support the CISCO-ENTITY-FRU-CONTROL-MIB" 1>&2
 fi
 
+cswSwitchState='1.3.6.1.4.1.9.9.500.1.2.1.1.6'
+$snmpwalkcmd $cswSwitchState | egrep "$unsupportedmib" > /dev/null 2>&1
+if [[ $? -ne 0 ]]; then # This device supports CISCO-STACKWISE-MIB
+
+	if [[ "$verbose" == 'true' ]]; then
+		echo "" 1>&2
+		echo "Looking at data from CISCO-STACKWISE-MIB" 1>&2
+	fi	
+	SwitchStateText[1]='waiting'
+	SwitchStateCode[1]='1' # warning
+	SwitchStateText[2]='progressing'
+	SwitchStateCode[2]='2' # warning
+	SwitchStateText[3]='added'
+	SwitchStateCode[3]='1' # warning
+	SwitchStateText[4]='ready'
+	SwitchStateCode[4]='0' # OK
+	SwitchStateText[5]='sdmMismatch'
+	SwitchStateCode[5]='1' # warning
+	SwitchStateText[6]='verMismatch'
+	SwitchStateCode[6]='1' # warning
+	SwitchStateText[7]='featureMismatch'
+	SwitchStateCode[7]='1' # warning
+	SwitchStateText[8]='newMasterInit'
+	SwitchStateCode[8]='1' # warning
+	SwitchStateText[9]='provisioned'
+	SwitchStateCode[9]='0' # OK
+	SwitchStateText[10]='invalid'
+	SwitchStateCode[10]='1' # warning
+	SwitchStateText[11]='removed'
+	SwitchStateCode[11]='2' # critical
+	
+	stackmembercount=0
+	for i in `$snmpwalkcmd $cswSwitchState | sed "s/.$cswSwitchState.//" | sed 's/ = INTEGER: /=/'`; do
+		let stackmembercount++
+		statusresult=`echo $i | awk -F = '{print $NF}'`
+		
+		if [[ ${SwitchStateCode[$statusresult]} -ne '0' || $verbose == 'true' ]]; then
+			cswSwitchNumCurrent='1.3.6.1.4.1.9.9.500.1.2.1.1.1'
+			
+			if [[ $exitcode -lt ${SwitchStateCode[$statusresult]} ]]; then
+				exitcode=${SwitchStateCode[$statusresult]}
+			fi
+			
+			switchindex=$(echo $i | awk -F = '{print $1}' )
+			switchid=$($snmpwalkcmd $cswSwitchNumCurrent.$switchindex | awk '{print $NF}')
+			
+			if [[ "$verbose" == 'true' ]]; then
+				echo "Switch $switchid is ${SwitchStateText[$statusresult]}: will exit $exitcode" 1>&2
+			else
+				echo -n "Switch $switchid is ${SwitchStateText[$statusresult]} "
+			fi
+		fi
+		
+	done
+	stackdata="checked $stackmembercount switches"
+		
+elif [[ "$verbose" == 'true' ]]; then
+	echo "" 1>&2
+	echo "This device does not support the CISCO-STACKWISE-MIB" 1>&2
+fi
+
 
 # Output final status message
 finalmessage=""
@@ -318,6 +381,10 @@ fi
 
 if [[ ! -z "$moduledata" ]]; then
 	finalmessage="$finalmessage $moduledata"
+fi
+
+if [[ ! -z "$stackdata" ]]; then
+	finalmessage="$finalmessage $stackdata"
 fi
 
 if [[ "#${finalmessage}#" == "# checked probes#" ]]; then
