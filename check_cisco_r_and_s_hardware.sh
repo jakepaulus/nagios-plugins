@@ -317,7 +317,7 @@ if [[ $? -ne 0 ]]; then # This device supports CISCO-STACKWISE-MIB
 	SwitchStateText[1]='waiting'
 	SwitchStateCode[1]='1' # warning
 	SwitchStateText[2]='progressing'
-	SwitchStateCode[2]='2' # warning
+	SwitchStateCode[2]='1' # warning
 	SwitchStateText[3]='added'
 	SwitchStateCode[3]='1' # warning
 	SwitchStateText[4]='ready'
